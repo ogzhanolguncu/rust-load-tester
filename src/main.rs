@@ -53,8 +53,9 @@ async fn main() -> Result<(), reqwest::Error> {
         stats: vec![],
     };
 
-    spinner.enable_steady_tick(Duration::from_millis(100)); // Update every 100ms
+    spinner.enable_steady_tick(Duration::from_millis(100));
     spinner.set_message("Processing...");
+    let test_start = Instant::now();
 
     for _ in 0..number_of_batches {
         final_result = process_batch(&url_to_test_against, args.concurrency, final_result).await;
@@ -69,8 +70,41 @@ async fn main() -> Result<(), reqwest::Error> {
         total_time: (total_min, total_max, total_mean),
         ttfb: (ttfb_min, ttfb_max, ttfb_mean),
         ttlb: (ttlb_min, ttlb_max, ttlb_mean),
-    } = calculate_stats(final_result);
+    } = calculate_stats(&final_result);
 
+    let test_end = Instant::now();
+
+    let test_duration = test_end.duration_since(test_start).as_secs_f32();
+
+    let rps = final_result.number_of_successful_calls as f32 / test_duration;
+
+    // Usage
+    let mut latencies = final_result
+        .stats
+        .iter()
+        .map(|s| s.ttfb)
+        .collect::<Vec<f32>>();
+    latencies.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    let p95 = calculate_percentiles(&latencies, 95.0);
+    let p99 = calculate_percentiles(&latencies, 99.0);
+
+    println!("Results:");
+    println!(
+        "Total Requests (2XX).......................: {}",
+        final_result.number_of_successful_calls
+    );
+    println!(
+        "Failed Requests (5XX).......................: {}",
+        final_result.number_of_failed_calls
+    );
+    println!("Request Per Sec (RPS).......................: {}", rps);
+    println!();
+    println!();
+    println!("P95.......................: {}", p95);
+    println!("P99.......................: {}", p99);
+    println!();
+    println!();
     println!(
         "Total Request Time (s) (Min, Max, Mean).....: {}, {}, {},",
         total_min, total_max, total_mean
@@ -144,7 +178,7 @@ struct CalculatedStats {
     total_time: (f32, f32, f32),
 }
 
-fn calculate_stats(result: LoadResult) -> CalculatedStats {
+fn calculate_stats(result: &LoadResult) -> CalculatedStats {
     let mut ttfb_min = f32::MAX;
     let mut ttfb_max = f32::MIN;
     let ttfb_mean = calculate_mean(&result.stats, |x| x.ttfb);
@@ -207,4 +241,13 @@ where
 
 fn truncate_to_two_decimals(num: f32) -> f32 {
     (num * 100.0).trunc() / 100.0
+}
+
+fn calculate_percentiles(latencies: &Vec<f32>, percentile: f32) -> f32 {
+    let len = latencies.len();
+    if len == 0 {
+        return 0.0;
+    }
+    let index = (percentile / 100.0 * (len as f32 - 1.0)).round() as usize;
+    *latencies.get(index).unwrap_or(&0.0)
 }
