@@ -14,7 +14,7 @@ struct Args {
     #[arg(short, long)]
     url: String,
 
-    /// Number of times to greet
+    /// Number of times to make request
     #[arg(short, long, default_value_t = 10)]
     number: u8,
 
