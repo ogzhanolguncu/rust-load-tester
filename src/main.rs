@@ -191,11 +191,11 @@ fn calculate_stats(result: LoadResult) -> CalculatedStats {
     }
 }
 
-fn calculate_mean<F>(numbers: &[Stats], mut value_extractor: F) -> Option<f32>
+fn calculate_mean<F>(numbers: &[Stats], value_extractor: F) -> Option<f32>
 where
     F: FnMut(&Stats) -> f32,
 {
-    let sum: f32 = numbers.iter().map(|x| value_extractor(x)).sum();
+    let sum: f32 = numbers.iter().map(value_extractor).sum();
     let count = numbers.len();
 
     if count > 0 {
